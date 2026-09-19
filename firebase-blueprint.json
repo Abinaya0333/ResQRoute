@@ -1,0 +1,127 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role authorization",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["reporter", "responder", "admin"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Incident": {
+      "title": "Incident",
+      "description": "Emergency or safety incident reported in the community",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "reporterId": { "type": "string" },
+        "reporterAnonymous": { "type": "boolean" },
+        "category": { "type": "string", "enum": ["medical", "security", "fire", "facility", "weather", "other"] },
+        "description": { "type": "string" },
+        "locationName": { "type": "string" },
+        "zone": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "status": { "type": "string", "enum": ["Reported", "Under review", "Verified", "Assigned", "Responding", "Help arrived", "Resolved", "Escalated"] },
+        "urgency": { "type": "string", "enum": ["Low", "Medium", "High", "Critical"] },
+        "aiAnalysis": { "type": "object" },
+        "assignedResponderId": { "type": "string" },
+        "assignedResponderName": { "type": "string" },
+        "duplicateOf": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["category", "description", "locationName", "status", "urgency", "createdAt"]
+    },
+    "Responder": {
+      "title": "Responder",
+      "description": "Registered campus or community responder",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["first_aid", "security", "facility", "venue_staff"] },
+        "status": { "type": "string", "enum": ["Available", "Dispatched", "Off-duty"] },
+        "currentZone": { "type": "string" },
+        "contactRadio": { "type": "string" }
+      },
+      "required": ["name", "type", "status"]
+    },
+    "IncidentAssignment": {
+      "title": "IncidentAssignment",
+      "description": "Assignment record of a responder to an incident",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "incidentId": { "type": "string" },
+        "responderId": { "type": "string" },
+        "assignedBy": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Accepted", "Rejected", "Completed"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["incidentId", "responderId", "status", "createdAt"]
+    },
+    "IncidentUpdate": {
+      "title": "IncidentUpdate",
+      "description": "Audit trail update or status log for an incident",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "incidentId": { "type": "string" },
+        "actorId": { "type": "string" },
+        "actorRole": { "type": "string" },
+        "actorName": { "type": "string" },
+        "statusFrom": { "type": "string" },
+        "statusTo": { "type": "string" },
+        "message": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["incidentId", "statusTo", "message", "timestamp"]
+    },
+    "SafetyCheckin": {
+      "title": "SafetyCheckin",
+      "description": "Anonymous or user safety confirmation during ongoing situations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "zone": { "type": "string" },
+        "status": { "type": "string", "enum": ["safe", "need_assistance"] },
+        "note": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["zone", "status", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "User" },
+      "description": "User profiles with role permissions"
+    },
+    "/incidents/{incidentId}": {
+      "schema": { "$ref": "Incident" },
+      "description": "Incidents reported across the community"
+    },
+    "/responders/{responderId}": {
+      "schema": { "$ref": "Responder" },
+      "description": "Campus/venue responders pool"
+    },
+    "/incident_assignments/{assignmentId}": {
+      "schema": { "$ref": "IncidentAssignment" },
+      "description": "Assignments matching responders to incidents"
+    },
+    "/incident_updates/{updateId}": {
+      "schema": { "$ref": "IncidentUpdate" },
+      "description": "Timeline and status updates for incidents"
+    },
+    "/safety_checkins/{checkinId}": {
+      "schema": { "$ref": "SafetyCheckin" },
+      "description": "Anonymous community safety check-ins"
+    }
+  }
+}

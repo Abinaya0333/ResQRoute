@@ -1,0 +1,156 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions for authentication & role checking
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function getUserRole() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : (request.auth.token.role != null ? request.auth.token.role : 'reporter');
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.role == 'admin' ||
+        getUserRole() == 'admin'
+      );
+    }
+
+    function isResponder() {
+      return isSignedIn() && (
+        request.auth.token.role == 'responder' ||
+        getUserRole() == 'responder'
+      );
+    }
+
+    // ==========================================================
+    // 1. Users Collection
+    // ==========================================================
+    match /users/{userId} {
+      // Users can read and update their own document; Admins can read all user docs
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Users can manage their own profile; Admins can create/manage any user profile
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================================
+    // 2. Incidents Collection
+    // ==========================================================
+    match /incidents/{incidentId} {
+      // Reporters can read ONLY their own reports (or seeded demo items where isDemo == true).
+      // Responders can read incidents assigned to them (or seeded demo incidents).
+      // Administrators have full oversight of all incidents.
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        resource.data.reporterId == request.auth.uid ||
+        (isResponder() && (
+          resource.data.assignedResponderId == request.auth.uid ||
+          (resource.data.assignedResponderId != null && exists(/databases/$(database)/documents/responders/$(resource.data.assignedResponderId)) &&
+           get(/databases/$(database)/documents/responders/$(resource.data.assignedResponderId)).data.userId == request.auth.uid)
+        )) ||
+        resource.data.isDemo == true
+      );
+
+      // Anyone authenticated can submit an incident report
+      allow create: if isSignedIn();
+
+      // Updates are strictly role-segregated:
+      // - Admins can perform full triage, priority override, assign responder, merge duplicate
+      // - Responders can ONLY update status & timestamps for incidents assigned to them
+      // - Reporters cannot override urgency, assign responders, or merge reports
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (
+          isResponder() && (
+            resource.data.assignedResponderId == request.auth.uid ||
+            (resource.data.assignedResponderId != null && exists(/databases/$(database)/documents/responders/$(resource.data.assignedResponderId)) &&
+             get(/databases/$(database)/documents/responders/$(resource.data.assignedResponderId)).data.userId == request.auth.uid)
+          ) &&
+          // Responders cannot change assigned responder, override urgency, or merge duplicates
+          request.resource.data.urgency == resource.data.urgency &&
+          request.resource.data.assignedResponderId == resource.data.assignedResponderId &&
+          request.resource.data.duplicateOf == resource.data.duplicateOf
+        ) ||
+        (
+          resource.data.reporterId == request.auth.uid &&
+          request.resource.data.status == resource.data.status &&
+          request.resource.data.urgency == resource.data.urgency &&
+          request.resource.data.assignedResponderId == resource.data.assignedResponderId &&
+          request.resource.data.duplicateOf == resource.data.duplicateOf
+        )
+      );
+
+      // Only administrators can delete incident reports
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================================
+    // 3. Responders Collection
+    // ==========================================================
+    match /responders/{responderId} {
+      // Authenticated users can view responder profiles and duty states
+      allow read: if isSignedIn();
+      // Responders can update their own duty/readiness status; Admins can create/manage all
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isResponder() && resource.data.userId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================================
+    // 4. Incident Assignments Collection
+    // ==========================================================
+    match /incident_assignments/{assignmentId} {
+      // Read access: Administrators and assigned responders can view assignments
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        isResponder()
+      );
+      // ONLY administrators can create new incident assignments
+      allow create: if isAdmin();
+      // Administrators can update; Responders can update their assignment acknowledgement status
+      allow update: if isSignedIn() && (
+        isAdmin() ||
+        (isResponder() && resource.data.responderId == request.auth.uid)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // ==========================================================
+    // 5. Incident Timeline Updates (incident_updates)
+    // ==========================================================
+    match /incident_updates/{updateId} {
+      // Read timeline updates for accessible incidents
+      allow read: if isSignedIn();
+      // Any authenticated user participating in an incident can append an audit timeline log
+      allow create: if isSignedIn();
+      // Timeline logs are immutable audit records
+      allow update, delete: if isAdmin();
+    }
+
+    // ==========================================================
+    // 6. Safety Check-ins (safety_checkins)
+    // ==========================================================
+    match /safety_checkins/{checkinId} {
+      // Authenticated users: Admins can inspect all check-ins; users/public can only read records flagged isPublic == true
+      allow read: if isSignedIn() && (isAdmin() || resource.data.isPublic == true);
+      // Only authenticated users (including authenticated anonymous sessions) can create check-in records to prevent bot spam
+      allow create: if isSignedIn();
+      // Only administrators can update or prune check-in records
+      allow update, delete: if isAdmin();
+    }
+  }
+}

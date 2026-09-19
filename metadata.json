@@ -1,0 +1,6 @@
+{
+  "name": "ResQRoute",
+  "description": "Privacy-first emergency coordination platform for campuses, residential communities, and venues.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
